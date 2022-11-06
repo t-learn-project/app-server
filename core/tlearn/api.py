@@ -8,7 +8,7 @@ class CardOut(Schema):
     id: int
     word: str
     translation: str
-    collection: int
+
 
 class CardIn(Schema):
     collection_id: int
