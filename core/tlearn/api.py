@@ -1,9 +1,9 @@
 from ninja import Router, Schema
-from .models import Card
+#from .models import Card
 from typing import List
 router = Router()
 
-class CardOut(Schema):
+""" class CardOut(Schema):
     id: int
     word: str
     translation: str
@@ -49,4 +49,4 @@ def get_cards(request, count: int):
     return {
         'count': len(card_list),
         'cards': list(card_list)
-    }
+    } """
