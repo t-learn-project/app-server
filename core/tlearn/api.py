@@ -1,5 +1,5 @@
 from ninja import Router, Schema
-#from .models import Card
+from .models import Card
 from typing import List
 router = Router()
 
@@ -50,3 +50,12 @@ def get_cards(request, count: int):
         'count': len(card_list),
         'cards': list(card_list)
     } """
+
+class CardOut(Schema):
+    word: str
+    transcription: str
+
+@router.get("/card/all", response=List[CardOut])
+def get_all_cards(request):
+    card_list = Card.objects.all()
+    return card_list

@@ -77,15 +77,14 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'tlearn',
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'Tlearndb',
         'USER': 'postgres',
         'PASSWORD': '55667788',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'HOST': '127.0.0.1',
+        'PORT': '5432'
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/4.1/ref/settings/#auth-password-validators
