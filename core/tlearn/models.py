@@ -2,13 +2,9 @@ from django.db import models
 
 class CardCollection(models.Model):
     name = models.CharField(max_length=255)
-
-class TranslationSet(models.Model):
-    pass
-
-class CardProgressStep(models.Model):
-    time_created = models.DateTimeField(auto_now=True)
-    previous_step = models.OneToOneField(to='self', null=True, on_delete=models.SET_NULL)
+    
+    def __str__(self):
+        return self.name
 
 class User(models.Model):
     email = models.CharField(max_length=255)
@@ -16,11 +12,21 @@ class User(models.Model):
     last_name = models.CharField(max_length=255)
     active_collection = models.OneToOneField(CardCollection, on_delete = models.CASCADE)
 
+    def __str__(self):
+        return f'{self.first_name} {self.last_name}'
+
 class Card(models.Model):
     collection = models.ForeignKey(CardCollection, on_delete = models.CASCADE)
     word = models.CharField(max_length=255)
     transcription = models.CharField(max_length=255)
-    translation = models.OneToOneField(TranslationSet, on_delete = models.CASCADE)
+
+    def __str__(self):
+        return self.word
+
+
+class CardProgressStep(models.Model):
+    time_created = models.DateTimeField(auto_now=True)
+    card_progress = models.ForeignKey('CardUserProgress', on_delete=models.CASCADE)
 
 class CardUserProgress(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -34,4 +40,7 @@ class CardState(models.Model):
 
 class Translation(models.Model):
     word = models.CharField(max_length=255)
-    set = models.ForeignKey(TranslationSet, on_delete=models.CASCADE)
+    card = models.ForeignKey(Card, related_name='translation', on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.word

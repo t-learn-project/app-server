@@ -2,7 +2,6 @@ from django.contrib import admin
 from .models import *
 
 admin.site.register(CardCollection)
-admin.site.register(TranslationSet)
 admin.site.register(CardProgressStep)
 admin.site.register(User)
 admin.site.register(Card)

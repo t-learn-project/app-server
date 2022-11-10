@@ -1,5 +1,5 @@
 from ninja import Router, Schema
-from .models import Card
+from .models import Card, Translation
 from typing import List
 router = Router()
 
@@ -51,11 +51,44 @@ def get_cards(request, count: int):
         'cards': list(card_list)
     } """
 
+class Collection(Schema):
+    name: str
+
+class TranslationSetOut(Schema):
+    id: int 
+    word: str
+
+""" class TranslationOut(Schema):
+    word: str
+    set: TransSset = None """
+
 class CardOut(Schema):
+    collection: str
     word: str
     transcription: str
-
+    translation: List[str]
+    
 @router.get("/card/all", response=List[CardOut])
 def get_all_cards(request):
-    card_list = Card.objects.all()
+    card_list=[]
+    card_set = Card.objects.all()
+    for card in card_set:
+        card_translations = card.translation.all()
+        card_list.append({
+            'collection': card.collection.name,
+            'word': card.word,
+            'transcription': card.transcription,
+            'translation': [i.word for i in card_translations]
+        })
     return card_list
+
+
+
+
+
+
+
+""" @router.get("/translation/all", response=List[Trans])
+def get_trans_cards(request):
+    trans_list = Translation.objects.all()
+    return trans_list """
