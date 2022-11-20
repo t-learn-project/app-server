@@ -23,7 +23,6 @@ class Statistics_For_GET(Schema):
     now_time: datetime
     total: datka.timedelta
 
-
 @router.post("/card/progress_post")
 def progress_post(request, payload: Statistics, otvet: int):
     if otvet==0:
@@ -35,7 +34,7 @@ def progress_post(request, payload: Statistics, otvet: int):
         penalty_step = payload.penalty_step
         )
 
-@router.get("/card/progress_get", response=List[Statistics_For_GET])
+@router.get("/card/progress_get")
 def get_all_progress(request):
     CardUserProgr_list=[]
     data = datka.datetime.now()
@@ -48,9 +47,13 @@ def get_all_progress(request):
             'time_created': stat.time_created,
             'penalty_step': stat.penalty_step,
             'now_time': data,
-            'total': data - stat.time_created
+            'total': (data - stat.time_created).seconds,
         })
-    return CardUserProgr_list
+    for i in range(len(CardUserProgr_list)):
+        if CardUserProgr_list[i]['state']!=0 and CardUserProgr_list[i]['total']>CardUserProgr_list[i]['state']:
+            return CardUserProgr_list[i] 
+            
+            
 
 class Collection(Schema): 
     name: str
