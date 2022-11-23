@@ -4,6 +4,7 @@ from django.utils import timezone
 """ from django.utils.timezone import utc
 import datetime """
 
+
 class Type(enum.Enum):
     NOUN = 0,        
     PRONOUN = 1,     
@@ -55,6 +56,7 @@ class CardUserProgress(models.Model):
     state = enum.EnumField(State)
     time_created = models.DateTimeField(auto_now=True)
     penalty_step = models.BooleanField()
+
 
 class Translation(models.Model):
     word = models.CharField(max_length=255)
