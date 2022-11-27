@@ -15,17 +15,10 @@ class Type(enum.Enum):
     CONJUNCTION = 6, 
     INTERJECTION = 7
 
-class State(enum.Enum):
-    Новое_Слово = 0,        
-    Через_5_Минут = 300,     
-    Через_1_Час = 3600,        
-    Через_1_День = 86400,   
-    Через_1_Неделю = 604800,     
-    Через_1_Месяц = 2419200, 
-    Через_3_Месяца = 7257600, 
-    Слово_Выучено = -1,
-    Уже_Знает = -2
-
+class State(models.Model):
+    name = models.CharField(max_length=255)
+    period = models.IntegerField()
+    
 class CardCollection(models.Model):
     name = models.CharField(max_length=255)
     
@@ -53,7 +46,7 @@ class Card(models.Model):
 class CardUserProgress(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     card = models.ForeignKey(Card, on_delete=models.CASCADE)
-    state = enum.EnumField(State)
+    state = models.ForeignKey(State, on_delete=models.CASCADE, default=0)
     time_created = models.DateTimeField(auto_now=True)
     penalty_step = models.BooleanField()
 
@@ -65,18 +58,6 @@ class Translation(models.Model):
     def __str__(self):
         return self.word
     
-    
-""" class ForTestTimeIn(models.Model):
-    created_time_in = models.DateTimeField(auto_now=True)#У меня здесь записано время ответа фронта
-    def get_time_diff(self):
-        if self.created_time:
-            now = datetime.datetime.utcnow().replace(tzinfo=utc)
-            TotalTime = now - self.created_time
-            return TotalTime.total_seconds() 
-
-class ForTestTimeOut(models.Model):
-    created_time_out = models.DateTimeField(auto_now=True)
- """
 
 '''Type {
   NOUN = 0, // rus: существительное
