@@ -90,14 +90,12 @@ def progress_post(request, otvet: int, id_card: int, id_user: int, payload: Stat
         if i.state_id == 1 and otvet == 1 and i.penalty_step == False:
             employee = get_object_or_404(CardUserProgress, pk=i.id)
             setattr(employee, 'state_id', 9)
-            setattr(employee, 'time_created', data)
             employee.save()
             return 'Вы уже знаете это слово'
 
         if i.state_id == 1 and otvet == 0:
             employee = get_object_or_404(CardUserProgress, pk=i.id)
             setattr(employee, 'state_id', 2)
-            setattr(employee, 'time_created', data)
             employee.save()
             return 'Слово попало в ротацию'
 
@@ -222,9 +220,9 @@ def create_cards(request, payload: CardCollectionIn):
     data = datka.datetime.now()
     CardUserProgress.objects.create(
             user_id = 1,
-            card_id = 15,
+            card_id = 17,
             state_id = id_state,
-            time_created = data,
+            time_created = 0,
             penalty_step = False,
         )
     return f'{card} Записано в базу данных!'
