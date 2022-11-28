@@ -9,56 +9,14 @@ from operator import itemgetter
 
 router = Router()
 
-class Statistics(Schema):
-    user_id: int
-    card_id: int
-    state_id: int
-    time_created: datetime
-    penalty_step: bool
-
-class Statistics_For_GET(Schema):
-    user_id: int
-    card_id: int
-    state: int 
-    time_created: datetime
-    penalty_step: bool
-    now_time: datetime
-    total: datka.timedelta
-
-class Collection(Schema): 
-    name: str
-
-class TranslationSetOut(Schema):
-    id: int 
-    word: str
-
-class CardOut(Schema):
-    collection: str
-    word: str
-    transcription: str
-    translation: List[str]
-    type: int
-
-class CardIn(Schema):
-    word: str
-    transcription: str
-    translation: List[str]
-    type: int
-
-class CardCollectionIn(Schema):
-    collection: str
-    cards: List[CardIn]   
-    stata: List[Statistics] 
-
-@router.get("/card/card_in_progress")
-def get_card_in_progress(request, count: int):
+@router.get("/card/study")
+def Возвращает_карточки_со_словами_для_обучения(request, count: int):
     prog = CardUserProgress.objects.all()[:count]
     now_data = datka.datetime.now()
     response_0 = []
     response_not_0 = []
     for x in prog:
         card_translations = x.card.translation.all()
-        time_created =  x.time_created
         total = (now_data - x.time_created).seconds
         if x.state.period>=0 and total > x.state.period and x.state.period != -1:
             if x.state.period == 0: 
@@ -72,25 +30,32 @@ def get_card_in_progress(request, count: int):
                     })
             if x.state.period>0:
                 response_not_0.append({
-                    'collection': x.card.collection.name,
+                    'collection': x.card.collection.name,                                                                                                                     
                     'word': x.card.word,
                     'transcription': x.card.transcription,
                     'translation': [i.word for i in card_translations],
                     'type': x.card.type,
                     'status': x.state.period,
                     })
-    response =  sorted(response_not_0, key=itemgetter('status'))+response_0
+    response =  (sorted(response_not_0, key=itemgetter('status'))+response_0)[:count]
     return response
     
 
-@router.post("/card/progress_post")
-def progress_post(request, otvet: int, id_card: int, id_user: int, payload: Statistics_For_GET):
+@router.post("/cards/study")
+def Принимает_ответ_от_пользователя(request, otvet: int, id_card: int, id_user: int):
     response = []
     down = CardUserProgress.objects.filter(card_id = id_card, user_id=id_user)
-    data = datka.datetime.now()
-        
+    check_step = 0
     for i in down:
-
+        def append_progress(response):
+            response.append({
+                'id': i.id,
+                'time_created': i.time_created,
+                'penalty_step': i.penalty_step,
+                'card_id': i.card_id,
+                'state_id': i.state_id+1,
+                'user_id': i.user_id})
+                
         if i.state_id == 1 and otvet == 1 and i.penalty_step == False:
             employee = get_object_or_404(CardUserProgress, pk=i.id)
             setattr(employee, 'state_id', 9)
@@ -103,49 +68,54 @@ def progress_post(request, otvet: int, id_card: int, id_user: int, payload: Stat
             employee.save()
             return 'Слово попало в ротацию'
 
-        if i.state_id>=1 and otvet == 1:
-            for j in range(8):
+        if i.state_id>=1 and otvet == 1 and i.penalty_step == False:
+            for j in range(1,8):                                             
                 if i.state_id==j:
                     employee = get_object_or_404(CardUserProgress, pk=i.id)
                     setattr(employee, 'state_id', j+1)
-                    setattr(employee, 'penalty_step', False)
                     employee.save()    
-                    response.append({
-                            'id': i.id,
-                            'time_created': i.time_created,
-                            'penalty_step': i.penalty_step,
-                            'card_id': i.card_id,
-                            'state_id': i.state_id+1,
-                            'user_id': i.user_id
-                    })
+                    append_progress(response)
                     if i.state_id == 8:
                         break
 
-        #Штрафной шаг
-        if otvet == 0 and i.state_id>1:
-            for j in range(8):
+    return response                    
+""" #Штрафной шаг
+        if i.state_id>1:
+            for j in range(1,8):
                 if i.state_id==j:
-                    if i.state_id >= 3:
+                    if i.state_id >= 3 and i.state_id != check_step:
+                        check_step = j
                         employee = get_object_or_404(CardUserProgress, pk=i.id)
-                        setattr(employee, 'state_id', j-2)
+                        setattr(employee, 'state_id', 2)
                         setattr(employee, 'penalty_step', True)
-                        employee.save()    
-                        response.append({
-                                'id': i.id,
-                                'time_created': i.time_created,
-                                'penalty_step': i.penalty_step,
-                                'card_id': i.card_id,
-                                'state_id': i.state_id+1,
-                                'user_id': i.user_id
-                        })
-                    if i.state_id == 8:
-                        break  
+                        employee.save()
+                        append_progress(response)
 
-    return response
+                    if i.penalty_step == True and otvet==1:
+
+                        if i.state_id == 2 and i.state_id != check_step:
+                            employee = get_object_or_404(CardUserProgress, pk=i.id)
+                            setattr(employee, 'state_id', 3)
+                            employee.save()
+                            append_progress(response)
+
+                        if i.state_id == 3 and i.state_id == check_step and i.penalty_step == True:
+                            employee = get_object_or_404(CardUserProgress, pk=i.id)
+                            setattr(employee, 'state_id', check_step+1)
+                            setattr(employee, 'penalty_step', False)
+                            employee.save()
+                            append_progress(response)
+                        
+                                                    
+        if i.state_id == 8:
+                break  
+    return response """
+
+
     
 
 @router.get("/card/progress_get")
-def get_all_progress(request):
+def Доступ_вне_зависимости_от_статуса(request):
     CardUserProgr_list=[]
     data = datka.datetime.now()
     CardUserProgr_set = CardUserProgress.objects.all()
@@ -159,20 +129,33 @@ def get_all_progress(request):
             'now_time': data,
             'total': (data - stat.time_created).seconds,
         })
-    response = [] 
-    for i in CardUserProgr_list:
-        if i['period']>=0 and i['total'] > i['period'] :
-            response.append(i)
-    return response
+    return CardUserProgr_list
 
+
+
+class Collection(Schema): 
+    name: str
+
+class TranslationSetOut(Schema):
+    id: int 
+    word: str
+
+class CardOut(Schema):
+    id: int
+    collection: str
+    word: str
+    transcription: str
+    translation: List[str]
+    type: int
 
 @router.get("/card/all", response=List[CardOut])
-def get_all_cards(request):
+def Получить_все_карточки(request):
     card_list=[]
     card_set = Card.objects.all()
     for card in card_set:
         card_translations = card.translation.all()
         card_list.append({
+            'id': card.id,
             'collection': card.collection.name,
             'word': card.word,
             'transcription': card.transcription,
@@ -182,12 +165,31 @@ def get_all_cards(request):
     return card_list
  
 
+ 
+class CardIn(Schema):
+    word: str
+    transcription: str
+    translation: List[str]
+    type: int
+
+class Statistics(Schema):
+    user_id: int
+    card_id: int
+    state_id: int
+    time_created: datetime
+    penalty_step: bool
+
+class CardCollectionIn(Schema):
+    collection: str
+    cards: List[CardIn]   
+    stata: List[Statistics] 
+
 @router.post("/card/add")
-def create_cards(request, payload: CardCollectionIn):
+def Создать_карточку(request, payload: CardCollectionIn, id_user: int):
     collection = CardCollection.objects.create(name=payload.collection)
     for card in payload.cards:
         card_object = Card.objects.create(
-            collection=collection,
+            collection = collection,
             word = card.word,
             transcription = card.transcription,
             type = card.type
@@ -197,14 +199,13 @@ def create_cards(request, payload: CardCollectionIn):
                 word = translation,
                 card = card_object
                 )
-    id_state = 1
-    data = datka.datetime.now()
-    CardUserProgress.objects.create(
-            user_id = 1,
-            card_id = 17,
-            state_id = id_state,
-            time_created = 0,
-            penalty_step = False,
-        )
-    return f'{card} Записано в базу данных!'
+        id_state = 1
+        CardUserProgress.objects.create(
+                user_id = id_user,
+                card_id = card_object.id,
+                state_id = id_state,
+                time_created = 0,
+                penalty_step = False,
+            ) 
+    return f'{card_object.word} с id = {card_object.id} Записано в базу данных!'
 
