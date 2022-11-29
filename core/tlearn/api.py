@@ -22,7 +22,7 @@ def Returns_cards_for_study(request, count: int, id_user: int):
                 'translation': [i.word for i in card_translations],
                 'type': x.card.type,
                 'status': x.state.period})
-                
+
     for x in Progress:
         collection_user = x.user.active_collection_id
         card_translations = x.card.translation.all()
@@ -185,7 +185,6 @@ class CardCollectionIn(Schema):
 
 @router.post("/card/add")
 def Создать_карточку(request, payload: CardCollectionIn, id_user: int, id_collection: int):
-    collection = CardCollection.objects.filter(id = id_collection)
     for card in payload.cards:
         card_object = Card.objects.create(
             collection_id = id_collection,
