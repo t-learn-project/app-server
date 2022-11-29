@@ -1,6 +1,5 @@
 from ninja import Router, Schema
 from django.shortcuts import get_object_or_404
-#from django.db import connection
 from .models import *
 from typing import List
 from datetime import *
@@ -10,100 +9,93 @@ from operator import itemgetter
 router = Router()
 
 @router.get("/card/study")
-def Возвращает_карточки_со_словами_для_обучения(request, count: int):
-    prog = CardUserProgress.objects.all()[:count]
-    now_data = datka.datetime.now()
-    response_0 = []
-    response_not_0 = []
-    for x in prog:
+def Returns_cards_for_study(request, count: int, id_user: int):
+    Progress = CardUserProgress.objects.filter(user_id = id_user)[:count]
+    NowData = datka.datetime.now()
+    NewCards = []
+    CardsInRotation = []
+    def AppendCards(list):
+        list.append({
+                'collection': x.card.collection.name,
+                'word': x.card.word,
+                'transcription': x.card.transcription,
+                'translation': [i.word for i in card_translations],
+                'type': x.card.type,
+                'status': x.state.period})
+                
+    for x in Progress:
+        collection_user = x.user.active_collection_id
         card_translations = x.card.translation.all()
-        total = (now_data - x.time_created).seconds
-        if x.state.period>=0 and total > x.state.period and x.state.period != -1:
+        total = (NowData - x.time_created).seconds
+        if x.state.period>=0 and total > x.state.period and x.card.collection.id == collection_user:
             if x.state.period == 0: 
-                response_0.append({
-                    'collection': x.card.collection.name,
-                    'word': x.card.word,
-                    'transcription': x.card.transcription,
-                    'translation': [i.word for i in card_translations],
-                    'type': x.card.type,
-                    'status': x.state.period,
-                    })
+                AppendCards(NewCards)
             if x.state.period>0:
-                response_not_0.append({
-                    'collection': x.card.collection.name,                                                                                                                     
-                    'word': x.card.word,
-                    'transcription': x.card.transcription,
-                    'translation': [i.word for i in card_translations],
-                    'type': x.card.type,
-                    'status': x.state.period,
-                    })
-    response =  (sorted(response_not_0, key=itemgetter('status'))+response_0)[:count]
+                AppendCards(CardsInRotation)
+    response =  (sorted(CardsInRotation, key=itemgetter('status'))+NewCards)[:count] 
     return response
-    
+
+class StatesID(enum.Enum):
+    NEW_WORD = 1,        
+    AFTER_5_MINUTES = 2,     
+    AFTER_1_HOUR = 3, 
+    AFTER_1_DAY = 4, 
+    AFTER_1_WEEK = 5, 
+    AFTER_1_MOUNTH = 6, 
+    AFTER_3_MOUNTH = 7, 
+    WORD_IS_LEARNED = 8, 
+    WORD_IS_ALREADY_KNOWS = 9
 
 @router.post("/cards/study")
-def Принимает_ответ_от_пользователя(request, otvet: int, id_card: int, id_user: int):
-    response = []
-    down = CardUserProgress.objects.filter(card_id = id_card, user_id=id_user)
-    check_step = 0
-    for i in down:
-        def append_progress(response):
-            response.append({
-                'id': i.id,
-                'time_created': i.time_created,
-                'penalty_step': i.penalty_step,
-                'card_id': i.card_id,
-                'state_id': i.state_id+1,
-                'user_id': i.user_id})
-                
-        if i.state_id == 1 and otvet == 1 and i.penalty_step == False:
-            employee = get_object_or_404(CardUserProgress, pk=i.id)
-            setattr(employee, 'state_id', 9)
-            employee.save()
-            return 'Вы уже знаете это слово'
+def Accepts_response_of_user(request, action: int, id_card: int, id_user: int):
+    Progress = CardUserProgress.objects.filter(card_id = id_card, user_id=id_user)
+    Penalty_step = 0
+    def UpdateState(state):
+            setattr(Table_for_update, 'state_id', state)
+            Table_for_update.save()
 
-        if i.state_id == 1 and otvet == 0:
-            employee = get_object_or_404(CardUserProgress, pk=i.id)
-            setattr(employee, 'state_id', 2)
-            employee.save()
-            return 'Слово попало в ротацию'
+    for i in Progress:
+        Table_for_update = get_object_or_404(CardUserProgress, pk=i.id)    
+        if action == 1 and i.state_id == StatesID.NEW_WORD.value and i.penalty_step == False:
+            UpdateState(StatesID.WORD_IS_ALREADY_KNOWS.value)
+            
+        if action == 0 and i.state_id == StatesID.NEW_WORD.value:
+            UpdateState(StatesID.AFTER_5_MINUTES.value)
+            
+        if action == 1 and i.state_id >= StatesID.NEW_WORD.value and i.penalty_step == False:
+            for NewState in StatesID:                                             
+                if i.state_id == NewState:
+                    UpdateState(NewState+1)
+                if i.state_id == StatesID.WORD_IS_LEARNED.value:
+                    return 'Word is learned' 
+                    
+                      
 
-        if i.state_id>=1 and otvet == 1 and i.penalty_step == False:
-            for j in range(1,8):                                             
-                if i.state_id==j:
-                    employee = get_object_or_404(CardUserProgress, pk=i.id)
-                    setattr(employee, 'state_id', j+1)
-                    employee.save()    
-                    append_progress(response)
-                    if i.state_id == 8:
-                        break
-
-    return response                    
 """ #Штрафной шаг
         if i.state_id>1:
             for j in range(1,8):
                 if i.state_id==j:
                     if i.state_id >= 3 and i.state_id != check_step:
                         check_step = j
-                        employee = get_object_or_404(CardUserProgress, pk=i.id)
-                        setattr(employee, 'state_id', 2)
-                        setattr(employee, 'penalty_step', True)
-                        employee.save()
+                        Table_for_update = get_object_or_404(CardUserProgress, pk=i.id)
+                        setattr(Table_for_update, 'state_id', 2)
+                        setattr(Table_for_update, 'penalty_step', True)
+                        Table_for_update.save()
                         append_progress(response)
 
-                    if i.penalty_step == True and otvet==1:
+                    if i.penalty_step == True and action==1:
 
                         if i.state_id == 2 and i.state_id != check_step:
-                            employee = get_object_or_404(CardUserProgress, pk=i.id)
-                            setattr(employee, 'state_id', 3)
-                            employee.save()
+                            Table_for_update = get_object_or_404(CardUserProgress, pk=i.id)
+                            setattr(Table_for_update, 'state_id', 3)
+                            Table_for_update.save()
                             append_progress(response)
 
                         if i.state_id == 3 and i.state_id == check_step and i.penalty_step == True:
-                            employee = get_object_or_404(CardUserProgress, pk=i.id)
-                            setattr(employee, 'state_id', check_step+1)
-                            setattr(employee, 'penalty_step', False)
-                            employee.save()
+                            Table_for_update = get_object_or_404(CardUserProgress, pk=i.id)
+                            setattr(Table_for_update, 'state_id', check_step+1)
+                            setattr(Table_for_update, 'penalty_step', False)
+                            Table_for_update.save()
                             append_progress(response)
                         
                                                     
@@ -112,7 +104,16 @@ def Принимает_ответ_от_пользователя(request, otvet: 
     return response """
 
 
-    
+@router.post("/card/choose_collection")
+def choose_collection(request, name_collection: str, id_user: int):
+    all = CardCollection.objects.all()
+    for i in all:
+        if name_collection == i.name:
+            Table_for_update = get_object_or_404(User, pk = id_user)
+            setattr(Table_for_update, 'active_collection_id', i.id)
+            Table_for_update.save() 
+    return 'Успешно'
+
 
 @router.get("/card/progress_get")
 def Доступ_вне_зависимости_от_статуса(request):
@@ -130,7 +131,6 @@ def Доступ_вне_зависимости_от_статуса(request):
             'total': (data - stat.time_created).seconds,
         })
     return CardUserProgr_list
-
 
 
 class Collection(Schema): 
@@ -165,7 +165,6 @@ def Получить_все_карточки(request):
     return card_list
  
 
- 
 class CardIn(Schema):
     word: str
     transcription: str
@@ -185,11 +184,11 @@ class CardCollectionIn(Schema):
     stata: List[Statistics] 
 
 @router.post("/card/add")
-def Создать_карточку(request, payload: CardCollectionIn, id_user: int):
-    collection = CardCollection.objects.create(name=payload.collection)
+def Создать_карточку(request, payload: CardCollectionIn, id_user: int, id_collection: int):
+    collection = CardCollection.objects.filter(id = id_collection)
     for card in payload.cards:
         card_object = Card.objects.create(
-            collection = collection,
+            collection_id = id_collection,
             word = card.word,
             transcription = card.transcription,
             type = card.type
@@ -208,4 +207,3 @@ def Создать_карточку(request, payload: CardCollectionIn, id_user:
                 penalty_step = False,
             ) 
     return f'{card_object.word} с id = {card_object.id} Записано в базу данных!'
-
