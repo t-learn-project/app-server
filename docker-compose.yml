@@ -5,8 +5,17 @@ services:
     command: "gunicorn core.wsgi:application --bind 0.0.0.0:8000"
     ports:
       - "8000:8000"
-    env_file:
-      - "./.env.prod"
+    environment:
+      - TLEARN_DEBUG:${TLEARN_DEBUG}
+      - TLEARN_ALLOWED_HOSTS:${TLEARN_ALLOWED_HOSTS}
+      - TLEARN_SECRET_KEY:${TLEARN_SECRET_KEY}
+      - TLEARN_DATABASE:${TLEARN_DATABASE}
+      - TLEARN_DATABASE_HOST:${TLEARN_DATABASE_HOST}
+      - TLEARN_DATABASE_PORT:${TLEARN_DATABASE_PORT}
+      - TLEARN_DATABASE_NAME:${TLEARN_DATABASE_NAME}
+      - TLEARN_DATABASE_USER:${TLEARN_DATABASE_USER}
+      - TLEARN_DATABASE_PASSWORD:${TLEARN_DATABASE_PASSWORD}
+
     volumes:
       - "tlearn_static:/home/app/tlearn/static"
 
