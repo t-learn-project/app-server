@@ -39,6 +39,7 @@ ENV HOME=/home/app
 ENV APP_HOME=/home/app/tlearn
 # Создает рабочий каталог приложения
 RUN mkdir $APP_HOME
+RUN mkdir $APP_HOME/static
 # Устанавливает рабочий каталог приложения как рабочий каталог текущего окружения
 WORKDIR $APP_HOME
 
