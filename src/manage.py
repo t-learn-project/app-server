@@ -3,6 +3,13 @@
 import os
 import sys
 
+DEBUG = os.getenv('TLEARN_DEBUG', default=False) == 'true'
+
+if DEBUG:
+    from dotenv import load_dotenv
+
+    load_dotenv('../tlearn-dev.env')
+
 
 def main():
     """Run administrative tasks."""
