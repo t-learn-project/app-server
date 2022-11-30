@@ -2,9 +2,14 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
-from dotenv import load_dotenv
 
-load_dotenv('../.env.dev')
+DEBUG = os.getenv('TLEARN_DEBUG', default=False) == 'true'
+
+if DEBUG:
+    from dotenv import load_dotenv
+
+    load_dotenv('../tlearn-dev.env')
+
 
 def main():
     """Run administrative tasks."""
