@@ -1,0 +1,6 @@
+Django==4.1.3
+django_enumfield==3.0
+django-ninja==0.19.1
+psycopg2-binary==2.9.5
+python-dotenv==0.21.0
+gunicorn==20.1.0
