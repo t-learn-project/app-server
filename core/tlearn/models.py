@@ -18,7 +18,7 @@ class Type(enum.Enum):
 class State(models.Model):
     name = models.CharField(max_length=255)
     period = models.IntegerField()
-    
+
 class CardCollection(models.Model):
     name = models.CharField(max_length=255)
     
@@ -46,9 +46,10 @@ class Card(models.Model):
 class CardUserProgress(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     card = models.ForeignKey(Card, on_delete=models.CASCADE)
-    state = models.ForeignKey(State, on_delete=models.CASCADE, default=0)
+    state = models.ForeignKey(State, on_delete=models.CASCADE)
     time_created = models.DateTimeField(auto_now=True)
     penalty_step = models.BooleanField()
+    penalty_state_id = models.IntegerField(default=0)
 
 
 class Translation(models.Model):
