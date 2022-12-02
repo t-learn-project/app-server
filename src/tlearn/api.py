@@ -50,7 +50,7 @@ class StatesID(enum.Enum):
     WORD_IS_ALREADY_KNOWS = 9
 
 class ActionsID(enum.Enum):
-    I_DONE_NOT_THIS_WORD = 0,
+    I_DONE_NOT_KNOW_THIS_WORD = 0,
     I_KNOW_THIS_WORD = 1
 
 class ResponseOfUser(Schema):
@@ -84,7 +84,7 @@ def Accepts_response_of_user(request, id_user: int, payload: Actions):
                 UpdateState(StatesID.WORD_IS_ALREADY_KNOWS.value)
                 return 'Слово было знакомо'
 
-            if user.action == ActionsID.I_DONE_NOT_THIS_WORD.value and i.state_id == StatesID.NEW_WORD.value:
+            if user.action == ActionsID.I_DONE_NOT_KNOW_THIS_WORD.value and i.state_id == StatesID.NEW_WORD.value:
                 UpdateState(StatesID.AFTER_5_MINUTES.value)
                 return 'Слово в ротации'
 
@@ -98,7 +98,7 @@ def Accepts_response_of_user(request, id_user: int, payload: Actions):
                         return 'Word is learned'
 
             #Обработка штрафного шага
-            if user.action == ActionsID.I_DONE_NOT_THIS_WORD.value and i.state_id >= StatesID.AFTER_1_DAY.value:
+            if user.action == ActionsID.I_DONE_NOT_KNOW_THIS_WORD.value and i.state_id >= StatesID.AFTER_1_DAY.value:
                 UpdateState(StatesID.AFTER_5_MINUTES.value)
                 UpdatePenaltyStep(True)
                 UpdatePenaltyStepId(i.state_id)
@@ -114,8 +114,6 @@ def Accepts_response_of_user(request, id_user: int, payload: Actions):
                 UpdatePenaltyStep(False)
                 return '{status: ok}'
                 
-
-
 @router.post("/card/choose_collection")
 def choose_collection(request, name_collection: str, id_user: int):
     all = CardCollection.objects.filter(name = name_collection)
@@ -125,7 +123,6 @@ def choose_collection(request, name_collection: str, id_user: int):
             setattr(Table_for_update, 'active_collection_id', i.id)
             Table_for_update.save() 
     return '{status: ok}'
-
 
 @router.get("/card/progress_get")
 def Доступ_вне_зависимости_от_статуса(request):
@@ -176,7 +173,6 @@ def Получить_все_карточки(request):
         })
     return card_list
  
-
 class CardIn(Schema):
     word: str
     transcription: str
@@ -193,7 +189,6 @@ class Statistics(Schema):
 class CardCollectionIn(Schema):
     collection: str
     cards: List[CardIn]   
-
 
 @router.post("/card/add")
 def Создать_карточку(request, payload: CardCollectionIn, id_user: int, id_collection: int):
@@ -215,6 +210,5 @@ def Создать_карточку(request, payload: CardCollectionIn, id_user:
                 state_id = StatesID.NEW_WORD.value,
                 time_created = 0,
                 penalty_step = False,
-            ) 
-    #'http://localhost:8000/api/v1/card/add?id_user=1&id_collection=1'        
+            )        
     return f'{card_object.word} с id = {card_object.id} Записано в базу данных!'
