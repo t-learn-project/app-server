@@ -14,28 +14,56 @@ def Returns_cards_for_study(request, count: int, id_user: int):
     now_data = datka.datetime.now()
     new_cards = []
     cards_in_rotations = []
-    def AppendCards(list):
+    def AppendCards(list, arg, id):
         list.append({
-                'collection': x.card.collection.name,
-                'word': x.card.word,
-                'transcription': x.card.transcription,
+                'id': id,
+                'collection': arg.collection.name,
+                'word': arg.word,
+                'transcription': arg.transcription,
                 'translation': [i.word for i in card_translations],
-                'type': x.card.type,
-                'status': x.state.period})
+                'type': arg.type
+                })
 
+    cards_in_progress_id = []
+    all_cards = Card.objects.all()
+    all_cards_id = []
+    for i in all_cards:
+        all_cards_id.append(i.id)
     for x in progress:
+        cards_in_progress_id.append(x.card_id)
         active_collection_id = x.user.active_collection_id
         card_translations = x.card.translation.all()
         total = (now_data - x.time_created).seconds
-        if x.state.period>=0 and total > x.state.period and x.card.collection.id == active_collection_id:
-            if x.state.period == 0: 
-                AppendCards(new_cards)
+        if x.state.period>0 and total > x.state.period and x.card.collection.id == active_collection_id:
+            AppendCards(cards_in_rotations, x.card, x.card_id)
+            
 
-            if x.state.period>0:
-                AppendCards(cards_in_rotations)
+    new_cards_id = []
+    for id in all_cards_id:
+        if id not in cards_in_progress_id:
+            new_cards_id.append(id)
 
-    response =  (sorted(cards_in_rotations, key=itemgetter('status'))+new_cards)[:count] 
+    for id in new_cards_id:
+        card = Card.objects.filter(id=id)
+        for k in card:
+            card_translations = k.translation.all()
+            new_cards.append({
+                'id': id,
+                'collection': k.collection.name,
+                'word': k.word,
+                'transcription': k.transcription,
+                'translation': [i.word for i in card_translations],
+                'type': k.type
+            })
+        
+    response = (cards_in_rotations+new_cards)[:count]
     return response
+        
+        
+
+        
+        
+
 
 
 class StatesID(enum.Enum):
@@ -71,49 +99,61 @@ def Accepts_response_of_user(request, id_user: int, payload: Actions):
         setattr(Table_for_update, 'penalty_step', flag)
         Table_for_update.save()
 
-    def UpdatePenaltyStepId(meaning):
+    def UpdatePenaltyStateId(meaning):
         setattr(Table_for_update, 'penalty_state_id', meaning)
-        Table_for_update.save()
+        Table_for_update.save() 
+    
+    def CreatedNewCards(state):
+        CardUserProgress.objects.create(
+            user_id = id_user,
+            card_id = user.id_card,
+            state_id = state,
+            time_created = 0,
+            penalty_step = False,
+            penalty_state_id = 0
+        )    
 
     for user in payload.actions:
         progress = CardUserProgress.objects.filter(card_id = user.id_card, user_id = id_user)
-        for i in progress:
-            Table_for_update = get_object_or_404(CardUserProgress, pk=i.id)
+        if f'{progress}' != "<QuerySet []>":
+            for i in progress:
+                Table_for_update = get_object_or_404(CardUserProgress, pk=i.id)
+                if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id >= StatesID.NEW_WORD.value and i.penalty_step == False:
+                    for NewState in StatesID:                                             
+                        if i.state_id == NewState:
+                            UpdateState(NewState+1)
+                            return f'Слово покажется через {NewState+1}'
 
-            if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id == StatesID.NEW_WORD.value and i.penalty_step == False:
-                UpdateState(StatesID.WORD_IS_ALREADY_KNOWS.value)
-                return 'Слово было знакомо'
+                        if i.state_id == StatesID.WORD_IS_LEARNED.value:
+                            return 'Word is learned'
 
-            if user.action == ActionsID.I_DONE_NOT_KNOW_THIS_WORD.value and i.state_id == StatesID.NEW_WORD.value:
-                UpdateState(StatesID.AFTER_5_MINUTES.value)
-                return 'Слово в ротации'
+                #Обработка штрафного шага
+                if user.action == ActionsID.I_DONE_NOT_KNOW_THIS_WORD.value and i.state_id >= StatesID.AFTER_1_DAY.value:
+                    UpdateState(StatesID.AFTER_5_MINUTES.value)
+                    UpdatePenaltyStep(True)
+                    UpdatePenaltyStateId(i.state_id)
+                    return '{status: ok}'
 
-            if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id >= StatesID.NEW_WORD.value and i.penalty_step == False:
-                for NewState in StatesID:                                             
-                    if i.state_id == NewState:
-                        UpdateState(NewState+1)
-                        return f'Слово покажется через {NewState+1}'
+                if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id == StatesID.AFTER_5_MINUTES and i.penalty_step == True:
+                    UpdateState(StatesID.AFTER_1_HOUR.value)
+                    return '{status: ok}'
+                    
+                if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id == StatesID.AFTER_1_HOUR.value and i.penalty_step == True:
+                    UpdateState(i.penalty_state_id+1)
+                    UpdatePenaltyStateId(0)
+                    UpdatePenaltyStep(False)
+                    return '{status: ok}'
 
-                    if i.state_id == StatesID.WORD_IS_LEARNED.value:
-                        return 'Word is learned'
 
-            #Обработка штрафного шага
-            if user.action == ActionsID.I_DONE_NOT_KNOW_THIS_WORD.value and i.state_id >= StatesID.AFTER_1_DAY.value:
-                UpdateState(StatesID.AFTER_5_MINUTES.value)
-                UpdatePenaltyStep(True)
-                UpdatePenaltyStepId(i.state_id)
-                return '{status: ok}'
+        if f'{progress}' == "<QuerySet []>":
+            if user.action == ActionsID.I_DONE_NOT_KNOW_THIS_WORD:
+                CreatedNewCards(StatesID.AFTER_5_MINUTES.value)
 
-            if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id == StatesID.AFTER_5_MINUTES and i.penalty_step == True:
-                UpdateState(StatesID.AFTER_1_HOUR.value)
-                return '{status: ok}'
-                
-            if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id == StatesID.AFTER_1_HOUR.value and i.penalty_step == True:
-                UpdateState(i.penalty_state_id+1)
-                UpdatePenaltyStepId(0)
-                UpdatePenaltyStep(False)
-                return '{status: ok}'
-                
+            if user.action == ActionsID.I_KNOW_THIS_WORD:
+                CreatedNewCards(StatesID.WORD_IS_ALREADY_KNOWS.value)
+            
+    
+
 @router.post("/card/choose_collection")
 def choose_collection(request, name_collection: str, id_user: int):
     all = CardCollection.objects.filter(name = name_collection)
@@ -204,11 +244,4 @@ def Создать_карточку(request, payload: CardCollectionIn, id_user:
                 word = translation,
                 card = card_object
                 )
-        CardUserProgress.objects.create(
-                user_id = id_user,
-                card_id = card_object.id,
-                state_id = StatesID.NEW_WORD.value,
-                time_created = 0,
-                penalty_step = False,
-            )        
     return f'{card_object.word} с id = {card_object.id} Записано в базу данных!'
