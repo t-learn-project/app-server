@@ -3,11 +3,10 @@
 import os
 import sys
 
-DEBUG = os.getenv('TLEARN_DEBUG', default=False) == 'true'
+DEBUG = os.getenv('TLEARN_DEBUG', default=True)
 
 if DEBUG:
     from dotenv import load_dotenv
-
     load_dotenv('../tlearn-dev.env')
 
 
