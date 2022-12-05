@@ -22,22 +22,29 @@ def Returns_cards_for_study(request, count: int, id_user: int):
                 'transcription': arg.transcription,
                 'translation': [i.word for i in card_translations],
                 'type': arg.type
-                })
+                }) 
 
     cards_in_progress_id = []
-    all_cards = Card.objects.all()
+    collection_user = User.objects.filter(id = id_user)
+    for l in collection_user:
+        all_cards = Card.objects.filter(collection_id = l.active_collection_id)
+
     all_cards_id = []
     for i in all_cards:
         all_cards_id.append(i.id)
+
     for x in progress:
         cards_in_progress_id.append(x.card_id)
         active_collection_id = x.user.active_collection_id
         card_translations = x.card.translation.all()
         total = (now_data - x.time_created).seconds
-        if x.state.period>0 and total > x.state.period and x.card.collection.id == active_collection_id:
-            AppendCards(cards_in_rotations, x.card, x.card_id)
-            
 
+        if x.state.period>=0 and total > x.state.period and x.card.collection.id == active_collection_id:
+            if x.state.period > 0:
+                AppendCards(cards_in_rotations, x.card, x.card_id)
+            if x.state.period == 0:
+                AppendCards(new_cards, x.card, x.card_id)
+    
     new_cards_id = []
     for id in all_cards_id:
         if id not in cards_in_progress_id:
@@ -47,25 +54,25 @@ def Returns_cards_for_study(request, count: int, id_user: int):
         card = Card.objects.filter(id=id)
         for k in card:
             card_translations = k.translation.all()
-            new_cards.append({
-                'id': id,
-                'collection': k.collection.name,
-                'word': k.word,
-                'transcription': k.transcription,
-                'translation': [i.word for i in card_translations],
-                'type': k.type
-            })
-        
+            collection_user = User.objects.filter(id = id_user)
+            for l in collection_user:
+                if l.active_collection_id == k.collection_id:
+                    new_cards.append({
+                            'id': id,
+                            'collection': k.collection.name,
+                            'word': k.word,
+                            'transcription': k.transcription,
+                            'translation': [i.word for i in card_translations],
+                            'type': k.type
+                    })
+            
     response = (cards_in_rotations+new_cards)[:count]
-    return response
+    
+    if len(response) == 0:
+        return 'Даже новых слов нету!'
+    else:
+        return response 
         
-        
-
-        
-        
-
-
-
 class StatesID(enum.Enum):
     NEW_WORD = 1,        
     AFTER_5_MINUTES = 2,     
@@ -87,7 +94,6 @@ class ResponseOfUser(Schema):
 
 class Actions(Schema):
     actions: List[ResponseOfUser]
-
 
 @router.post("/cards/study")
 def Accepts_response_of_user(request, id_user: int, payload: Actions):
@@ -118,6 +124,14 @@ def Accepts_response_of_user(request, id_user: int, payload: Actions):
         if f'{progress}' != "<QuerySet []>":
             for i in progress:
                 Table_for_update = get_object_or_404(CardUserProgress, pk=i.id)
+                if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id == StatesID.NEW_WORD.value and i.penalty_step == False:
+                    UpdateState(StatesID.WORD_IS_ALREADY_KNOWS.value)
+                    return 'Слово было знакомо'
+
+                if user.action == ActionsID.I_DONE_NOT_KNOW_THIS_WORD.value and i.state_id == StatesID.NEW_WORD.value:
+                    UpdateState(StatesID.AFTER_5_MINUTES.value)
+                    return 'Слово в ротации'
+
                 if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id >= StatesID.NEW_WORD.value and i.penalty_step == False:
                     for NewState in StatesID:                                             
                         if i.state_id == NewState:
@@ -148,18 +162,29 @@ def Accepts_response_of_user(request, id_user: int, payload: Actions):
         if f'{progress}' == "<QuerySet []>":
             if user.action == ActionsID.I_DONE_NOT_KNOW_THIS_WORD:
                 CreatedNewCards(StatesID.AFTER_5_MINUTES.value)
+                return 'Карточка в ротации'
 
             if user.action == ActionsID.I_KNOW_THIS_WORD:
                 CreatedNewCards(StatesID.WORD_IS_ALREADY_KNOWS.value)
-            
-    
+                return 'Карточку знали заранее'
 
+@router.post("/card/remote_progress")
+def remote_CardUserProgress(request, id_user: int):
+    all = CardUserProgress.objects.filter(user_id = id_user)
+    for i in all:
+        Table_for_update = get_object_or_404(CardUserProgress, pk=i.id)
+        setattr(Table_for_update, 'state_id', StatesID.NEW_WORD.value)
+        setattr(Table_for_update, 'penalty_step', False)
+        setattr(Table_for_update, 'penalty_state_id', 0)
+        Table_for_update.save()
+    return 'Прогресс сброшен'
+    
 @router.post("/card/choose_collection")
 def choose_collection(request, name_collection: str, id_user: int):
     all = CardCollection.objects.filter(name = name_collection)
     for i in all:
         if name_collection == i.name:
-            Table_for_update = get_object_or_404(User, pk = id_user)
+            Table_for_update = get_object_or_404(User, id = id_user)
             setattr(Table_for_update, 'active_collection_id', i.id)
             Table_for_update.save() 
     return '{status: ok}'

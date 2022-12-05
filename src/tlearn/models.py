@@ -29,7 +29,7 @@ class User(models.Model):
     email = models.CharField(max_length=255)
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
-    active_collection = models.OneToOneField(CardCollection, on_delete = models.CASCADE)
+    active_collection = models.ForeignKey(CardCollection, on_delete = models.CASCADE)
 
     def __str__(self):
         return f'{self.first_name} {self.last_name}'
@@ -59,15 +59,3 @@ class Translation(models.Model):
     def __str__(self):
         return self.word
     
-
-'''Type {
-  NOUN = 0, // rus: существительное
-  PRONOUN = 1,     // rus: местоимение
-  VERB = 2,        // rus: глагол
-  ADJECTIVE = 3,   // rus: прилагательное
-  ADVERB = 4,      // rus: наречие
-  PREPOSITION = 5, // rus: предлог
-  CONJUNCTION = 6, // rus: союз
-  INTERJECTION = 7 // rus: междометие
-}'''
-
