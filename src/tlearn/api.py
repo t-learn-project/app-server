@@ -56,7 +56,7 @@ def returns_cards_for_study(request, count: int):
             if x.state.period == 0:
                 AppendCards(new_cards, x.card, x.card_id)
 
-    #Добавление, преобразованных в json-формат, новых карточек
+    #Преобразование карточек в json-формат
     for y in all_new_cards:
         card_translations = y.translation.all()
         active_collection_id = collection_user.active_collection_id
@@ -66,7 +66,7 @@ def returns_cards_for_study(request, count: int):
     response = (cards_in_rotations+new_cards)[:count]
 
     if len(response) == 0:
-        return 'Даже новых слов нету!'
+        return 'Have not new words'
     else: 
         return response
     
@@ -107,48 +107,48 @@ def accepts_response_of_user(request, payload: Actions):
                 #Новое слово было известно
                 if user.action == ActionsID.KNOWN_WORD.value and i.state_id == StatesID.NEW_WORD.value and i.penalty_step == False:
                     UpdateState(StatesID.WORD_IS_ALREADY_KNOWS.value)
-                    return 200, {'status': 'Great'}
+                    return 200, {'status': 'ok'}
                 
                 #Новое слово не было известно
                 if user.action == ActionsID.UNKNOWN_WORD.value and i.state_id == StatesID.NEW_WORD.value:
                     UpdateState(StatesID.AFTER_5_MINUTES.value)
-                    return 200, {'status': 'Great'}
+                    return 200, {'status': 'ok'}
 
 
                 if user.action == ActionsID.KNOWN_WORD.value and i.state_id >= StatesID.NEW_WORD.value and i.penalty_step == False:
                     for NewState in StatesID:                                             
                         if i.state_id == NewState:
                             UpdateState(NewState+1)
-                            return 200, {'status': 'Great'}
+                            return 200, {'status': 'ok'}
 
                         if i.state_id == StatesID.WORD_IS_LEARNED.value:
-                            return 200, {'status': 'Great'}
+                            return 200, {'status': 'ok'}
 
                 #Обработка штрафного шага
                 if user.action == ActionsID.UNKNOWN_WORD.value and i.state_id >= StatesID.AFTER_1_DAY.value:
                     UpdateState(StatesID.AFTER_5_MINUTES.value)
                     UpdatePenaltyStep(True)
                     UpdatePenaltyStateId(i.state_id)
-                    return '{status: ok}'
+                    return 200, {'status': 'ok'}
 
                 if user.action == ActionsID.KNOWN_WORD.value and i.state_id == StatesID.AFTER_5_MINUTES and i.penalty_step == True:
                     UpdateState(StatesID.AFTER_1_HOUR.value)
-                    return '{status: ok}'
+                    return 200, {'status': 'ok'}
                     
                 if user.action == ActionsID.KNOWN_WORD.value and i.state_id == StatesID.AFTER_1_HOUR.value and i.penalty_step == True:
                     UpdateState(i.penalty_state_id+1)
                     UpdatePenaltyStateId(0)
                     UpdatePenaltyStep(False)
-                    return '{status: ok}'
+                    return 200, {'status': 'ok'}
 
         if progress == []:
             if user.action == ActionsID.UNKNOWN_WORD:
                 CreatedNewCards(StatesID.AFTER_5_MINUTES.value)
-                return 'Карточка в ротации'
+                return 'Card in rotation'
 
             if user.action == ActionsID.KNOWN_WORD:
                 CreatedNewCards(StatesID.WORD_IS_ALREADY_KNOWS.value)
-                return 'Карточку знали заранее'
+                return 'Card is already known'
 
 @router.post("/card/remote_progress")
 def remote_CardUserProgress(request, id_user: int):
