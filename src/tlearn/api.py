@@ -4,16 +4,28 @@ from .models import *
 from typing import List
 from datetime import *
 import datetime as datka
-from operator import itemgetter
+from ninja.security import django_auth
+from .models_for_api import *
 
 router = Router()
 
-@router.get("/card/study")
-def Returns_cards_for_study(request, count: int, id_user: int):
+""" @router.get("/cards/statistics", auth=AuthBearer())
+def returns_statistics(request):
+    id_user = request.auth
+    progress = CardUserProgress.objects.filter(user_id = id_user)
+    not_in_progress = len(progress.exclude(state_id__in = [2,3,4,5,6,7]))
+    in_progress = len(progress.exclude(state_id__in = [1,8,9]))
+    is_learned = len(progress.filter(state_id = 8))
+    already_learned = len(progress.filter(state_id = 9))
+    return f'Кол-во в ротации: {in_progress}; ' \
+           f'Кол-во не в ротации: {not_in_progress}; ' \
+           f'Кол-во выученных: {is_learned}; ' \
+           f'Кол-во заранее выученных: {already_learned}; ' """
+
+@router.get("/cards/study", auth=AuthBearer())
+def returns_cards_for_study(request, count: int):
+    id_user = request.auth
     progress = CardUserProgress.objects.filter(user_id = id_user)[:count]
-    now_data = datka.datetime.now()
-    new_cards = []
-    cards_in_rotations = []
     def AppendCards(list, arg, id):
         list.append({
                 'id': id,
@@ -22,81 +34,46 @@ def Returns_cards_for_study(request, count: int, id_user: int):
                 'transcription': arg.transcription,
                 'translation': [i.word for i in card_translations],
                 'type': arg.type
-                }) 
+                })
 
-    cards_in_progress_id = []
-    collection_user = User.objects.filter(id = id_user)
-    for l in collection_user:
-        all_cards = Card.objects.filter(collection_id = l.active_collection_id)
+    collection_user = User.objects.get(id = id_user)
+    all_new_cards = Card.objects.exclude(id__in = CardUserProgress.objects.values_list('id'))#Карточки, которых нету в ротации
+    now_data = datka.datetime.now()
 
-    all_cards_id = []
-    for i in all_cards:
-        all_cards_id.append(i.id)
-
+    new_cards = []
+    cards_in_rotations = []
     for x in progress:
-        cards_in_progress_id.append(x.card_id)
-        active_collection_id = x.user.active_collection_id
-        card_translations = x.card.translation.all()
+        card_translations = x.card.translation.all() 
+        active_collection_id = collection_user.active_collection_id
         total = (now_data - x.time_created).seconds
-
         if x.state.period>=0 and total > x.state.period and x.card.collection.id == active_collection_id:
+
+            #Карточки, находящиеся в ротации
             if x.state.period > 0:
                 AppendCards(cards_in_rotations, x.card, x.card_id)
+
+            #Карточки, которые уже были в ротации, но имеют статус "новое"(используется при сбросе прогресса по словарю)
             if x.state.period == 0:
                 AppendCards(new_cards, x.card, x.card_id)
-    
-    new_cards_id = []
-    for id in all_cards_id:
-        if id not in cards_in_progress_id:
-            new_cards_id.append(id)
 
-    for id in new_cards_id:
-        card = Card.objects.filter(id=id)
-        for k in card:
-            card_translations = k.translation.all()
-            collection_user = User.objects.filter(id = id_user)
-            for l in collection_user:
-                if l.active_collection_id == k.collection_id:
-                    new_cards.append({
-                            'id': id,
-                            'collection': k.collection.name,
-                            'word': k.word,
-                            'transcription': k.transcription,
-                            'translation': [i.word for i in card_translations],
-                            'type': k.type
-                    })
-            
+    #Добавление, преобразованных в json-формат, новых карточек
+    for y in all_new_cards:
+        card_translations = y.translation.all()
+        active_collection_id = collection_user.active_collection_id
+        if y.collection_id == active_collection_id:
+            AppendCards(new_cards, y, y.pk)
+
     response = (cards_in_rotations+new_cards)[:count]
-    
+
     if len(response) == 0:
         return 'Даже новых слов нету!'
-    else:
-        return response 
-        
-class StatesID(enum.Enum):
-    NEW_WORD = 1,        
-    AFTER_5_MINUTES = 2,     
-    AFTER_1_HOUR = 3, 
-    AFTER_1_DAY = 4, 
-    AFTER_1_WEEK = 5, 
-    AFTER_1_MOUNTH = 6, 
-    AFTER_3_MOUNTH = 7, 
-    WORD_IS_LEARNED = 8, 
-    WORD_IS_ALREADY_KNOWS = 9
+    else: 
+        return response
+    
+@router.post("/cards/study", auth=AuthBearer(), response={200: Success})
+def accepts_response_of_user(request, payload: Actions):
+    id_user = request.auth
 
-class ActionsID(enum.Enum):
-    I_DONE_NOT_KNOW_THIS_WORD = 0,
-    I_KNOW_THIS_WORD = 1
-
-class ResponseOfUser(Schema):
-    action: int 
-    id_card: int
-
-class Actions(Schema):
-    actions: List[ResponseOfUser]
-
-@router.post("/cards/study")
-def Accepts_response_of_user(request, id_user: int, payload: Actions):
     def UpdateState(state):
         setattr(Table_for_update, 'state_id', state)
         Table_for_update.save()
@@ -121,50 +98,55 @@ def Accepts_response_of_user(request, id_user: int, payload: Actions):
 
     for user in payload.actions:
         progress = CardUserProgress.objects.filter(card_id = user.id_card, user_id = id_user)
-        if f'{progress}' != "<QuerySet []>":
+        if progress != []:
+
+            #Основная логика обработки карточек, находящихся в ротации
             for i in progress:
                 Table_for_update = get_object_or_404(CardUserProgress, pk=i.id)
-                if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id == StatesID.NEW_WORD.value and i.penalty_step == False:
+
+                #Новое слово было известно
+                if user.action == ActionsID.KNOWN_WORD.value and i.state_id == StatesID.NEW_WORD.value and i.penalty_step == False:
                     UpdateState(StatesID.WORD_IS_ALREADY_KNOWS.value)
-                    return 'Слово было знакомо'
-
-                if user.action == ActionsID.I_DONE_NOT_KNOW_THIS_WORD.value and i.state_id == StatesID.NEW_WORD.value:
+                    return 200, {'status': 'Great'}
+                
+                #Новое слово не было известно
+                if user.action == ActionsID.UNKNOWN_WORD.value and i.state_id == StatesID.NEW_WORD.value:
                     UpdateState(StatesID.AFTER_5_MINUTES.value)
-                    return 'Слово в ротации'
+                    return 200, {'status': 'Great'}
 
-                if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id >= StatesID.NEW_WORD.value and i.penalty_step == False:
+
+                if user.action == ActionsID.KNOWN_WORD.value and i.state_id >= StatesID.NEW_WORD.value and i.penalty_step == False:
                     for NewState in StatesID:                                             
                         if i.state_id == NewState:
                             UpdateState(NewState+1)
-                            return f'Слово покажется через {NewState+1}'
+                            return 200, {'status': 'Great'}
 
                         if i.state_id == StatesID.WORD_IS_LEARNED.value:
-                            return 'Word is learned'
+                            return 200, {'status': 'Great'}
 
                 #Обработка штрафного шага
-                if user.action == ActionsID.I_DONE_NOT_KNOW_THIS_WORD.value and i.state_id >= StatesID.AFTER_1_DAY.value:
+                if user.action == ActionsID.UNKNOWN_WORD.value and i.state_id >= StatesID.AFTER_1_DAY.value:
                     UpdateState(StatesID.AFTER_5_MINUTES.value)
                     UpdatePenaltyStep(True)
                     UpdatePenaltyStateId(i.state_id)
                     return '{status: ok}'
 
-                if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id == StatesID.AFTER_5_MINUTES and i.penalty_step == True:
+                if user.action == ActionsID.KNOWN_WORD.value and i.state_id == StatesID.AFTER_5_MINUTES and i.penalty_step == True:
                     UpdateState(StatesID.AFTER_1_HOUR.value)
                     return '{status: ok}'
                     
-                if user.action == ActionsID.I_KNOW_THIS_WORD.value and i.state_id == StatesID.AFTER_1_HOUR.value and i.penalty_step == True:
+                if user.action == ActionsID.KNOWN_WORD.value and i.state_id == StatesID.AFTER_1_HOUR.value and i.penalty_step == True:
                     UpdateState(i.penalty_state_id+1)
                     UpdatePenaltyStateId(0)
                     UpdatePenaltyStep(False)
                     return '{status: ok}'
 
-
-        if f'{progress}' == "<QuerySet []>":
-            if user.action == ActionsID.I_DONE_NOT_KNOW_THIS_WORD:
+        if progress == []:
+            if user.action == ActionsID.UNKNOWN_WORD:
                 CreatedNewCards(StatesID.AFTER_5_MINUTES.value)
                 return 'Карточка в ротации'
 
-            if user.action == ActionsID.I_KNOW_THIS_WORD:
+            if user.action == ActionsID.KNOWN_WORD:
                 CreatedNewCards(StatesID.WORD_IS_ALREADY_KNOWS.value)
                 return 'Карточку знали заранее'
 
@@ -206,22 +188,6 @@ def Доступ_вне_зависимости_от_статуса(request):
         })
     return CardUserProgr_list
 
-
-class Collection(Schema): 
-    name: str
-
-class TranslationSetOut(Schema):
-    id: int 
-    word: str
-
-class CardOut(Schema):
-    id: int
-    collection: str
-    word: str
-    transcription: str
-    translation: List[str]
-    type: int
-
 @router.get("/card/all", response=List[CardOut])
 def Получить_все_карточки(request):
     card_list=[]
@@ -237,26 +203,9 @@ def Получить_все_карточки(request):
             'type': card.type
         })
     return card_list
- 
-class CardIn(Schema):
-    word: str
-    transcription: str
-    translation: List[str]
-    type: int
-
-class Statistics(Schema):
-    user_id: int
-    card_id: int
-    state_id: int
-    time_created: datetime
-    penalty_step: bool
-
-class CardCollectionIn(Schema):
-    collection: str
-    cards: List[CardIn]   
 
 @router.post("/card/add")
-def Создать_карточку(request, payload: CardCollectionIn, id_user: int, id_collection: int):
+def Создать_карточку(request, payload: CardCollectionIn, id_collection: int):
     for card in payload.cards:
         card_object = Card.objects.create(
             collection_id = id_collection,
@@ -270,3 +219,4 @@ def Создать_карточку(request, payload: CardCollectionIn, id_user:
                 card = card_object
                 )
     return f'{card_object.word} с id = {card_object.id} Записано в базу данных!'
+

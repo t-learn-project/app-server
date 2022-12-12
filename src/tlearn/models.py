@@ -1,8 +1,5 @@
 from django.db import models
 from django_enumfield import enum
-from django.utils import timezone
-""" from django.utils.timezone import utc
-import datetime """
 
 
 class Type(enum.Enum):
