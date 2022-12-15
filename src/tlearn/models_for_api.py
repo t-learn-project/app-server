@@ -4,6 +4,8 @@ import jwt
 from ninja.security import HttpBearer
 from django_enumfield import enum
 from datetime import *
+from core.settings import TLEARN_JWT_ACCESS_SECRET
+
 
 class CardOut(Schema):
     id: int
@@ -18,7 +20,7 @@ class Success(Schema):
 
 class AuthBearer(HttpBearer):
     def authenticate(self, request, token):
-        key = "jwt-sekre-trefresh--key1234sdksd$$^BDS"
+        key = TLEARN_JWT_ACCESS_SECRET
         return jwt.decode(token, key, algorithms="HS256")["id"]
 
 class StatesID(enum.Enum):
@@ -39,9 +41,6 @@ class ActionsID(enum.Enum):
 class ResponseOfUser(Schema):
     action: int 
     id_card: int
-
-class Actions(Schema):
-    actions: List[ResponseOfUser]
 
 class Collection(Schema): 
     name: str

@@ -9,19 +9,6 @@ from .models_for_api import *
 
 router = Router()
 
-""" @router.get("/cards/statistics", auth=AuthBearer())
-def returns_statistics(request):
-    id_user = request.auth
-    progress = CardUserProgress.objects.filter(user_id = id_user)
-    not_in_progress = len(progress.exclude(state_id__in = [2,3,4,5,6,7]))
-    in_progress = len(progress.exclude(state_id__in = [1,8,9]))
-    is_learned = len(progress.filter(state_id = 8))
-    already_learned = len(progress.filter(state_id = 9))
-    return f'Кол-во в ротации: {in_progress}; ' \
-           f'Кол-во не в ротации: {not_in_progress}; ' \
-           f'Кол-во выученных: {is_learned}; ' \
-           f'Кол-во заранее выученных: {already_learned}; ' """
-
 @router.get("/cards/study", auth=AuthBearer())
 def returns_cards_for_study(request, count: int):
     id_user = request.auth
@@ -43,7 +30,7 @@ def returns_cards_for_study(request, count: int):
     new_cards = []
     cards_in_rotations = []
     for x in progress:
-        card_translations = x.card.translation.all() 
+        card_translations = x.card.translation.all()
         active_collection_id = collection_user.active_collection_id
         total = (now_data - x.time_created).seconds
         if x.state.period>=0 and total > x.state.period and x.card.collection.id == active_collection_id:
@@ -57,7 +44,7 @@ def returns_cards_for_study(request, count: int):
                 AppendCards(new_cards, x.card, x.card_id)
 
     #Преобразование карточек в json-формат
-    for y in all_new_cards:
+    for y in all_new_cards[:count]:
         card_translations = y.translation.all()
         active_collection_id = collection_user.active_collection_id
         if y.collection_id == active_collection_id:
@@ -71,7 +58,7 @@ def returns_cards_for_study(request, count: int):
         return response
     
 @router.post("/cards/study", auth=AuthBearer(), response={200: Success})
-def accepts_response_of_user(request, payload: Actions):
+def accepts_response_of_user(request, payload: List[ResponseOfUser]):
     id_user = request.auth
 
     def UpdateState(state):
@@ -96,7 +83,7 @@ def accepts_response_of_user(request, payload: Actions):
             penalty_state_id = 0
         )    
 
-    for user in payload.actions:
+    for user in payload:
         progress = CardUserProgress.objects.filter(card_id = user.id_card, user_id = id_user)
         if progress != []:
 
@@ -122,6 +109,9 @@ def accepts_response_of_user(request, payload: Actions):
                             return 200, {'status': 'ok'}
 
                         if i.state_id == StatesID.WORD_IS_LEARNED.value:
+                            return 200, {'status': 'ok'}
+
+                        if i.state_id == StatesID.WORD_IS_ALREADY_KNOWS:
                             return 200, {'status': 'ok'}
 
                 #Обработка штрафного шага
@@ -161,7 +151,7 @@ def remote_CardUserProgress(request, id_user: int):
         Table_for_update.save()
     return 'Прогресс сброшен'
     
-@router.post("/card/choose_collection")
+@router.post("/card/choose_collection", response={200: Success})
 def choose_collection(request, name_collection: str, id_user: int):
     all = CardCollection.objects.filter(name = name_collection)
     for i in all:
@@ -169,54 +159,6 @@ def choose_collection(request, name_collection: str, id_user: int):
             Table_for_update = get_object_or_404(User, id = id_user)
             setattr(Table_for_update, 'active_collection_id', i.id)
             Table_for_update.save() 
-    return '{status: ok}'
+    return 200, {'status': 'ok'}
 
-@router.get("/card/progress_get")
-def Доступ_вне_зависимости_от_статуса(request):
-    CardUserProgr_list=[]
-    data = datka.datetime.now()
-    CardUserProgr_set = CardUserProgress.objects.all()
-    for stat in CardUserProgr_set:
-        CardUserProgr_list.append({
-            'user_id': stat.user_id,
-            'card_id': stat.card_id,
-            'period': stat.state.period,
-            'time_created': stat.time_created,
-            'penalty_step': stat.penalty_step,
-            'now_time': data,
-            'total': (data - stat.time_created).seconds,
-        })
-    return CardUserProgr_list
-
-@router.get("/card/all", response=List[CardOut])
-def Получить_все_карточки(request):
-    card_list=[]
-    card_set = Card.objects.all()
-    for card in card_set:
-        card_translations = card.translation.all()
-        card_list.append({
-            'id': card.id,
-            'collection': card.collection.name,
-            'word': card.word,
-            'transcription': card.transcription,
-            'translation': [i.word for i in card_translations],
-            'type': card.type
-        })
-    return card_list
-
-@router.post("/card/add")
-def Создать_карточку(request, payload: CardCollectionIn, id_collection: int):
-    for card in payload.cards:
-        card_object = Card.objects.create(
-            collection_id = id_collection,
-            word = card.word,
-            transcription = card.transcription,
-            type = card.type
-                )
-        for translation in card.translation:
-            Translation.objects.create(
-                word = translation,
-                card = card_object
-                )
-    return f'{card_object.word} с id = {card_object.id} Записано в базу данных!'
 

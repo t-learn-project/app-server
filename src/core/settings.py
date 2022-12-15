@@ -20,6 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('TLEARN_SECRET_KEY')
+TLEARN_JWT_ACCESS_SECRET = os.getenv('TLEARN_SECRET_KEY_TOKEN')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('TLEARN_DEBUG', default=False) == 'true'
