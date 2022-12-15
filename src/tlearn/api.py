@@ -140,8 +140,8 @@ def accepts_response_of_user(request, payload: List[ResponseOfUser]):
                 CreatedNewCards(StatesID.WORD_IS_ALREADY_KNOWS.value)
                 return 'Card is already known'
 
-@router.post("/card/remote_progress", auth=AuthBearer(), response={200: Success})
-def remote_CardUserProgress(request):
+@router.post("/progress/", auth=AuthBearer(), response={200: Success})
+def reset_progress(request):
     id_user = request.auth
     all = CardUserProgress.objects.filter(user_id = id_user)
     for i in all:
@@ -152,15 +152,30 @@ def remote_CardUserProgress(request):
         Table_for_update.save()
     return 200, {'status': 'ok'}
     
-@router.post("/card/choose_collection", auth=AuthBearer(), response={200: Success})
-def choose_collection(request, name_collection: str):
+@router.post("/collection/", auth=AuthBearer(), response={200: Success})
+def set_active_collection(request, id_collection: int):
     id_user = request.auth
-    all = CardCollection.objects.filter(name = name_collection)
+    all = CardCollection.objects.filter(pk = id_collection)
     for i in all:
-        if name_collection == i.name:
-            Table_for_update = get_object_or_404(User, id = id_user)
-            setattr(Table_for_update, 'active_collection_id', i.id)
-            Table_for_update.save() 
+        Table_for_update = get_object_or_404(User, id = id_user)
+        setattr(Table_for_update, 'active_collection_id', i.id)
+        Table_for_update.save() 
     return 200, {'status': 'ok'}
 
+@router.get("/collections/", auth=AuthBearer(), response={200: Success})
+def get_all_collections(request):
+    collections = CardCollection.objects.all()
+    resp = []
+    for x in collections:
+        resp.append({
+            "id": x.pk,
+            "name": x.name,
+            "all_words": [i.word for i in Card.objects.filter(id = x.pk)]
+        })
+    return resp
 
+@router.get("/active_collections/", auth=AuthBearer(), response={200: Success})
+def get_active_collections(request):
+    id_user = request.auth
+    collection_id = User.objects.filter(pk = id_user).values_list('active_collection_id')
+    return collection_id
