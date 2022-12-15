@@ -174,8 +174,9 @@ def get_all_collections(request):
         })
     return resp
 
-@router.get("/active_collections/", auth=AuthBearer(), response={200: Success})
+@router.get("/active_collections/", response={200: Success})
 def get_active_collections(request):
-    id_user = request.auth
+    """ id_user = request.auth
     collection_id = User.objects.filter(pk = id_user).values_list('active_collection_id')
-    return collection_id
+    return collection_id """
+    return TLEARN_JWT_ACCESS_SECRET
