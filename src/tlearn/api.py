@@ -140,8 +140,9 @@ def accepts_response_of_user(request, payload: List[ResponseOfUser]):
                 CreatedNewCards(StatesID.WORD_IS_ALREADY_KNOWS.value)
                 return 'Card is already known'
 
-@router.post("/card/remote_progress")
-def remote_CardUserProgress(request, id_user: int):
+@router.post("/card/remote_progress", auth=AuthBearer(), response={200: Success})
+def remote_CardUserProgress(request):
+    id_user = request.auth
     all = CardUserProgress.objects.filter(user_id = id_user)
     for i in all:
         Table_for_update = get_object_or_404(CardUserProgress, pk=i.id)
@@ -149,10 +150,11 @@ def remote_CardUserProgress(request, id_user: int):
         setattr(Table_for_update, 'penalty_step', False)
         setattr(Table_for_update, 'penalty_state_id', 0)
         Table_for_update.save()
-    return 'Прогресс сброшен'
+    return 200, {'status': 'ok'}
     
-@router.post("/card/choose_collection", response={200: Success})
-def choose_collection(request, name_collection: str, id_user: int):
+@router.post("/card/choose_collection", auth=AuthBearer(), response={200: Success})
+def choose_collection(request, name_collection: str):
+    id_user = request.auth
     all = CardCollection.objects.filter(name = name_collection)
     for i in all:
         if name_collection == i.name:
