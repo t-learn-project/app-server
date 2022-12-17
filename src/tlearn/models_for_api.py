@@ -42,6 +42,9 @@ class ResponseOfUser(Schema):
     action: int 
     id_card: int
 
+class Actions(Schema):
+    actions: List[ResponseOfUser]
+
 class Collection(Schema): 
     name: str
 
@@ -63,5 +66,13 @@ class Statistics(Schema):
     penalty_step: bool
 
 class CardCollectionIn(Schema):
-    collection: str
     cards: List[CardIn]   
+
+class CardCollectionCreate(Schema):
+    name: str
+
+class CreateUser(Schema):
+    email: str
+    first_name: str
+    last_name: str
+    active_collection_id: int
