@@ -40,7 +40,7 @@ class ActionsID(enum.Enum):
 
 class ResponseOfUser(Schema):
     action: int 
-    id_card: int
+    card_id: int
 
 class Actions(Schema):
     actions: List[ResponseOfUser]

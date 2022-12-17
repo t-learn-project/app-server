@@ -12,7 +12,7 @@ router = Router()
 @router.get("/cards/study", auth=AuthBearer())
 def returns_cards_for_study(request, count: int):
     id_user = request.auth
-    progress = CardUserProgress.objects.filter(user_id = id_user)[:count]
+    progress = CardUserProgress.objects.filter(user_id = id_user)
     def AppendCards(list, arg, id, id_state):
         list.append({
                 'id': id,
@@ -25,7 +25,7 @@ def returns_cards_for_study(request, count: int):
                 })
 
     collection_user = User.objects.get(id = id_user)
-    all_new_cards = Card.objects.exclude(id__in = CardUserProgress.objects.values_list('id'))#Карточки, которых нету в ротации
+    all_new_cards = Card.objects.filter(collection_id = collection_user.active_collection_id).exclude(id__in = CardUserProgress.objects.values_list('id'))#Карточки, которых нету в ротации
     now_data = datka.datetime.now()
 
     new_cards = []
@@ -48,7 +48,7 @@ def returns_cards_for_study(request, count: int):
     for y in all_new_cards[:count]:
         card_translations = y.translation.all()
         active_collection_id = collection_user.active_collection_id
-        if y.collection_id == active_collection_id:
+        if y.collection.pk == active_collection_id:
             AppendCards(new_cards, y, y.pk, 0)
             
 
@@ -57,7 +57,7 @@ def returns_cards_for_study(request, count: int):
     if len(response) == 0:
         return 'Have not new words'
     else: 
-        return response
+        return new_cards
     
 @router.post("/cards/study", auth=AuthBearer())
 def accepts_response_of_user(request, payload: Actions):
@@ -77,14 +77,14 @@ def accepts_response_of_user(request, payload: Actions):
     def CreatedNewCards(state):
         CardUserProgress.objects.create(
             user_id = id_user,
-            card_id = x.id_card,
+            card_id = x.card_id,
             state_id = state,
             time_created = 0,
             penalty_step = False,
             penalty_state_id = 0
         )  
     for x in payload.actions:
-        progress = CardUserProgress.objects.filter(card_id = x.id_card, user_id = id_user)
+        progress = CardUserProgress.objects.filter(card_id = x.card_id, user_id = id_user)
         if list(progress) != []:
 
             #Основная логика обработки карточек, находящихся в ротации
@@ -92,64 +92,62 @@ def accepts_response_of_user(request, payload: Actions):
                 Table_for_update = get_object_or_404(CardUserProgress, pk=i.id)
 
                 #Новое слово было известно
-                if x.action == ActionsID.KNOWN_WORD.value and i.state_id == StatesID.NEW_WORD.value and i.penalty_step == False:
+                if i.state_id == StatesID.NEW_WORD.value and x.action == ActionsID.KNOWN_WORD.value and i.penalty_step == False:
                     UpdateState(StatesID.WORD_IS_ALREADY_KNOWS.value)
-                    return 200, {'status': 'ok'}
+                    #return 200, {'status': 'ok'}
                     
                 #Новое слово не было известно
                 if x.action == ActionsID.UNKNOWN_WORD.value and i.state_id == StatesID.NEW_WORD.value:
                     UpdateState(StatesID.AFTER_5_MINUTES.value)
-                    return 200, {'status': 'ok'}
+                    #return 200, {'status': 'ok'}
 
 
-                if x.action == ActionsID.KNOWN_WORD.value and i.state_id >= StatesID.NEW_WORD.value and i.penalty_step == False:
+                if i.state_id > StatesID.NEW_WORD.value and x.action == ActionsID.KNOWN_WORD.value and i.penalty_step == False:
                     for NewState in StatesID:   
-                        if i.state_id == StatesID.WORD_IS_LEARNED.value:
-                            return 200, {'status': 'ok'}
-
-                        if i.state_id == StatesID.WORD_IS_ALREADY_KNOWS:
-                            return 200, {'status': 'ok'}
-
-                        if i.state_id == NewState:
+                        if i.state_id == NewState and i.state_id != StatesID.WORD_IS_ALREADY_KNOWS and i.state_id != StatesID.WORD_IS_LEARNED.value:
                             UpdateState(NewState+1)
-                            return 200, {'status': 'ok'}
+                            #return 200, {'status': 'ok'}
                             
                 #Обработка штрафного шага
                 if x.action == ActionsID.UNKNOWN_WORD.value and i.state_id >= StatesID.AFTER_1_DAY.value:
                     UpdateState(StatesID.AFTER_5_MINUTES.value)
                     UpdatePenaltyStep(True)
                     UpdatePenaltyStateId(i.state_id)
-                    return 200, {'status': 'ok'}
+                    #return 200, {'status': 'ok'}
 
                 if x.action == ActionsID.KNOWN_WORD.value and i.state_id == StatesID.AFTER_5_MINUTES and i.penalty_step == True:
                     UpdateState(StatesID.AFTER_1_HOUR.value)
-                    return 200, {'status': 'ok'}
+                    #return 200, {'status': 'ok'}
                         
                 if x.action == ActionsID.KNOWN_WORD.value and i.state_id == StatesID.AFTER_1_HOUR.value and i.penalty_step == True:
                     UpdateState(i.penalty_state_id+1)
                     UpdatePenaltyStateId(0)
                     UpdatePenaltyStep(False)
-                    return 200, {'status': 'ok'}
+                    #return 200, {'status': 'ok'}
                 
         if list(progress) == []:
             if x.action == ActionsID.UNKNOWN_WORD:
                 CreatedNewCards(StatesID.AFTER_5_MINUTES.value)
-                return 200, {'status':'ok'}
+                #return 200, {'status':'ok'}
 
             if x.action == ActionsID.KNOWN_WORD:
                 CreatedNewCards(StatesID.WORD_IS_ALREADY_KNOWS.value)
-                return 200, {'status':'ok'} 
+                #return 200, {'status':'ok'} 
+    return 200, {'status':'ok'} 
+    
             
 @router.post("/progress/", auth=AuthBearer(), response={200: Success})
 def reset_progress(request):
     id_user = request.auth
+    collection_user = User.objects.get(id = id_user)
     all = CardUserProgress.objects.filter(user_id = id_user)
     for i in all:
         Table_for_update = get_object_or_404(CardUserProgress, pk=i.id)
-        setattr(Table_for_update, 'state_id', StatesID.NEW_WORD.value)
-        setattr(Table_for_update, 'penalty_step', False)
-        setattr(Table_for_update, 'penalty_state_id', 0)
-        Table_for_update.save()
+        if i.card.collection.pk == collection_user.active_collection_id:
+            setattr(Table_for_update, 'state_id', StatesID.NEW_WORD.value)
+            setattr(Table_for_update, 'penalty_step', False)
+            setattr(Table_for_update, 'penalty_state_id', 0)
+            Table_for_update.save()
     return 200, {'status': 'ok'}
     
 @router.post("/collection/", auth=AuthBearer(), response={200: Success})
@@ -175,11 +173,11 @@ def get_all_collections(request):
     return response
     
 
-@router.get("/active_collections/", auth=AuthBearer(), response={200: Success})
+@router.get("/active_collections/", auth=AuthBearer())
 def get_active_collections(request):
     id_user = request.auth
-    collection_id = User.objects.filter(pk = id_user).values_list('active_collection_id')
-    return 200, {'status': 'ok'} 
+    collection_id = User.objects.filter(id = id_user).values_list('active_collection_id', flat=True)
+    return list(collection_id)
 
 """ @router.post("/card/add")
 def Создать_карточку(request, payload: CardCollectionIn, id_collection: int):
@@ -195,8 +193,8 @@ def Создать_карточку(request, payload: CardCollectionIn, id_colle
                 word = translation,
                 card = card_object
                 )
-    return f'{card_object.word} с id = {card_object.id} Записано в базу данных!'
-
+    return f'{card_object.word} с id = {card_object.id} Записано в базу данных!' """
+"""
 @router.post("/collection/add")
 def create_collection(request, payload: CardCollectionCreate):
     collection_object = CardCollection.objects.create(name = payload.name)
